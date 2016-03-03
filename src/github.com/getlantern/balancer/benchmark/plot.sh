@@ -16,7 +16,7 @@ for size in "${sizes[@]}"; do
     grep $size $file > $file.$size
     series=`echo $file | cut -d "_" -f 2 | cut -d ":" -f 1`
 
-    part1=" '$file' using 2:4 title '$series' with lines,"
+    part1=" '$file.$size' using 2:4 title '$series' with lines,"
     line1+=$part1
     cp gnuplot.script  gnuplot.script.$series."${names[0]}".$size
     echo "set title '$series ${names[0]} $size'" >> gnuplot.script.$series."${names[0]}".$size
@@ -24,7 +24,7 @@ for size in "${sizes[@]}"; do
     echo "plot $part1" >> gnuplot.script.$series."${names[0]}".$size
     gnuplot gnuplot.script.$series."${names[0]}".$size > png/$series."${names[0]}".$size.png
 
-    part2=" '$file' using 2:9 title '$series' with lines,"
+    part2=" '$file.$size' using 2:9 title '$series' with lines,"
     line2+=$part2
     cp gnuplot.script  gnuplot.script.$series."${names[1]}".$size
     echo "set title '$series ${names[1]} $size'" >> gnuplot.script.$series."${names[1]}".$size

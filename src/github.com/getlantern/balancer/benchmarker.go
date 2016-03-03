@@ -68,7 +68,7 @@ func (bm *Benchmarker) dump(size string) {
 		bm.throughput)
 }
 
-func (bm *Benchmarker) ping(size string) {
+func (bm *Benchmarker) ping(size string) bool {
 	client := &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
@@ -78,16 +78,18 @@ func (bm *Benchmarker) ping(size string) {
 	req, err := http.NewRequest("GET", "http://it-does-not-matter.com", nil)
 	if err != nil {
 		log.Errorf("Could not create HTTP request?")
-		return
+		return false
 	}
 	req.Header.Set("X-LANTERN-AUTH-TOKEN", bm.AuthToken)
 	req.Header.Set("X-Lantern-Ping", size)
 
+	bm.bytesRead = 0
+	bm.throughput = 0
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Debugf("Error ping dialer %s: %s", bm.Label, err)
-		return
+		return false
 	}
 	n, err := io.Copy(ioutil.Discard, resp.Body)
 	if err != nil {
@@ -100,4 +102,5 @@ func (bm *Benchmarker) ping(size string) {
 		log.Debugf("Unable to close response body: %v", err)
 	}
 	log.Tracef("Ping %s, status code %d", bm.Label, resp.StatusCode)
+	return true
 }
