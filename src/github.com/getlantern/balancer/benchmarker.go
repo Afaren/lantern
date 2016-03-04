@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -17,9 +16,10 @@ type datapoint struct {
 
 type Benchmarker struct {
 	dialer
-	writer     io.WriteCloser
-	bytesRead  int64
-	throughput int64
+	writer        io.WriteCloser
+	bytesRead     int64
+	throughput    int64
+	avgThroughput int64
 }
 
 func NewBenchmarker(d *Dialer, filename string) *Benchmarker {
@@ -30,23 +30,32 @@ func NewBenchmarker(d *Dialer, filename string) *Benchmarker {
 	return &Benchmarker{dialer: dialer{Dialer: d}, writer: file}
 }
 
-func (bm *Benchmarker) Start() {
+func (bm *Benchmarker) Start(every time.Duration, interval time.Duration) {
 	bm.start()
-	timer := time.NewTimer(time.Duration(rand.Intn(60)) * time.Second)
-	sizes := [...]string{"small", "medium", "large"}
 	go func() {
+		ticker := time.NewTimer(0)
+		sizes := [...]string{"small", "medium", "large"}
+	out:
 		for {
 			select {
-			case <-timer.C:
-				size := sizes[rand.Intn(3)]
-				bm.ping(size)
-				bm.dump(size)
-				timer.Reset(time.Duration(rand.Intn(60)) * time.Second)
+			case <-ticker.C:
+				ticker.Reset(every)
+				timer := time.NewTimer(interval)
+				for _, size := range sizes {
+					bm.ping(size)
+					bm.dump(size)
+					timer.Reset(interval)
+					select {
+					case <-timer.C:
+					case <-bm.closeCh:
+						break out
+					}
+				}
 			case <-bm.closeCh:
-				_ = bm.writer.Close()
-				return
+				break out
 			}
 		}
+		_ = bm.writer.Close()
 	}()
 }
 
@@ -56,7 +65,7 @@ func (bm *Benchmarker) Stop() {
 
 func (bm *Benchmarker) dump(size string) {
 	m := bm.metrics()
-	fmt.Fprintf(bm.writer, "%s,%s,%s,%d,%d,%d,%d,%d,%d\n",
+	fmt.Fprintf(bm.writer, "%s,%s,%s,%d,%d,%d,%d,%d,%d,%d\n",
 		bm.Label,
 		time.Now().Format("15:04:05"),
 		size,
@@ -65,10 +74,16 @@ func (bm *Benchmarker) dump(size string) {
 		m.consecFailures,
 		m.errorCount,
 		bm.bytesRead,
-		bm.throughput)
+		bm.throughput,
+		bm.avgThroughput)
 }
 
 func (bm *Benchmarker) ping(size string) bool {
+	bm.bytesRead = 0
+	bm.throughput = 0
+	defer func() {
+		bm.avgThroughput = (bm.avgThroughput + bm.throughput) / 2
+	}()
 	client := &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
@@ -83,8 +98,6 @@ func (bm *Benchmarker) ping(size string) bool {
 	req.Header.Set("X-LANTERN-AUTH-TOKEN", bm.AuthToken)
 	req.Header.Set("X-Lantern-Ping", size)
 
-	bm.bytesRead = 0
-	bm.throughput = 0
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {

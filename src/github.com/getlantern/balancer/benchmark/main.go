@@ -28,6 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	start := time.Now().Format("20060102T15:04:05")
 	var wg sync.WaitGroup
 	for _, s := range servers {
 		wg.Add(1)
@@ -36,13 +37,22 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			start := time.Now().Format("20060102T15:04:05")
 			fname := fmt.Sprintf("./%s_%s.csv", start, s.Addr)
 			bm := balancer.NewBenchmarker(d, fname)
-			bm.Start()
+			bm.Start(10*time.Minute, 10*time.Second)
+			log.Debugf("Started benchmarker %s", s.Addr)
 			<-ch
+			log.Debugf("Stopping benchmarker %s", s.Addr)
+			bm.Stop()
+			log.Debugf("Stopped benchmarker %s", s.Addr)
 			wg.Done()
 		}(s)
+		timer := time.NewTimer(1 * time.Minute) // avoid overlap
+		select {
+		case <-timer.C:
+		case <-ch:
+			return
+		}
 	}
 	wg.Wait()
 }
@@ -54,7 +64,6 @@ func handleSignals() chan struct{} {
 	signal.Notify(c,
 		syscall.SIGHUP,
 		syscall.SIGINT,
-		syscall.SIGTERM,
 		syscall.SIGQUIT)
 	go func() {
 		s := <-c
