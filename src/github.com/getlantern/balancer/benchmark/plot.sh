@@ -4,51 +4,52 @@ declare -a names=("DialTime" "Throughput")
 declare -a sizes=("small" "medium" "large")
 
 mkdir -p png
-for name in "${names[@]}"; do
+
+# draw graph for each server
+for file in *.csv; do
+  server=`echo $file | cut -d "_" -f 2 | cut -d ":" -f 1`
+  cp gnuplot.script  gnuplot.script.$server
+  echo "set multiplot layout 3,2 rowsfirst title '$server'" >> gnuplot.script.$server
   for size in "${sizes[@]}"; do
-    cp gnuplot.script  gnuplot.script.$name.$size
+    grep $size $file > $file.$size
+    echo "set title '$server ${names[0]} with $size payload'" >> gnuplot.script.$server
+    echo "set ylabel 'ms'" >> gnuplot.script.$server
+    echo "plot '$file.$size' using 2:4 with l notitle" >> gnuplot.script.$server
+
+    echo "set title '$server ${names[1]} with $size payload'" >> gnuplot.script.$server
+    echo "set ylabel 'kBps'" >> gnuplot.script.$server
+    echo "plot '$file.$size' using 2:9 with l notitle" >> gnuplot.script.$server
   done
+  gnuplot gnuplot.script.$server > png/$server.png
 done
+
+
+# draw overall graph
+script=gnuplot.script.overall
+cp gnuplot.script $script
+echo "set multiplot layout 3,2 rowsfirst title 'Overall'" >> $script
+
 for size in "${sizes[@]}"; do
   line1="plot "
   line2="plot "
-  for file in *443.csv; do
+  for file in *.csv; do
     grep $size $file > $file.$size
-    series=`echo $file | cut -d "_" -f 2 | cut -d ":" -f 1`
-
-    part1=" '$file.$size' using 2:4 title '$series' with lines,"
-    line1+=$part1
-    cp gnuplot.script  gnuplot.script.$series."${names[0]}".$size
-    echo "set title '$series ${names[0]} $size'" >> gnuplot.script.$series."${names[0]}".$size
-    echo "set ylabel 'ms'" >> gnuplot.script.$series."${names[0]}".$size
-    echo "plot $part1" >> gnuplot.script.$series."${names[0]}".$size
-    gnuplot gnuplot.script.$series."${names[0]}".$size > png/$series."${names[0]}".$size.png
-
-    part2=" '$file.$size' using 2:9 title '$series' with lines,"
-    line2+=$part2
-    cp gnuplot.script  gnuplot.script.$series."${names[1]}".$size
-    echo "set title '$series ${names[1]} $size'" >> gnuplot.script.$series."${names[1]}".$size
-    echo "set ylabel 'Bps'" >> gnuplot.script.$series."${names[1]}".$size
-    echo "plot $part2" >> gnuplot.script.$series."${names[1]}".$size
-    gnuplot gnuplot.script.$series."${names[1]}".$size > png/$series."${names[1]}".$size.png
-
+    server=`echo $file | cut -d "_" -f 2 | cut -d ":" -f 1`
+    line1+=" '$file.$size' using 2:4 title '$server' with l,"
+    line2+=" '$file.$size' using 2:9 title '$server' with l,"
   done
 
-  echo "set title '${names[0]} $size'" >> gnuplot.script."${names[0]}".$size
-  echo "set ylabel 'ms'" >> gnuplot.script."${names[0]}".$size
-  echo "$line1" >> gnuplot.script."${names[0]}".$size
+  echo "set title '${names[0]} with $size paylod'" >> $script
+  echo "set ylabel 'ms'" >> $script
+  echo "$line1" >> $script
 
-  echo "set title '${names[1]} $size'" >> gnuplot.script."${names[1]}".$size
-  echo "set ylabel 'Bps'" >> gnuplot.script."${names[1]}".$size
-  echo "$line2" >> gnuplot.script."${names[1]}".$size
+  echo "set title '${names[1]} with $size paylod'" >> $script
+  echo "set ylabel 'Bps'" >> $script
+  echo "$line2" >> $script
 done
-
-for name in "${names[@]}"; do
-  for size in "${sizes[@]}"; do
-    gnuplot gnuplot.script.$name.$size > png/$name.$size.png
-  done
-done
+gnuplot $script > png/overall.png
 
 for size in "${sizes[@]}"; do
   rm *.$size
 done
+rm gnuplot.script.*
