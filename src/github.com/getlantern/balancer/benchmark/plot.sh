@@ -17,7 +17,7 @@ for file in *.csv; do
     echo "plot '$file.$size' using 2:4 with l notitle" >> gnuplot.script.$server
 
     echo "set title '$server ${names[1]} with $size payload'" >> gnuplot.script.$server
-    echo "set ylabel 'kBps'" >> gnuplot.script.$server
+    echo "set ylabel 'Bps'" >> gnuplot.script.$server
     echo "plot '$file.$size' using 2:9 with l notitle" >> gnuplot.script.$server
   done
   gnuplot gnuplot.script.$server > png/$server.png
